@@ -20,9 +20,32 @@ by Datahugger.
 - [figshare](https://figshare.com)
 - [GitHub](https://github.com)
 - [DRYAD](https://datadryad.org)
-- [Hugging Face](https://huggingface.co)
+- [Hugging Face](https://huggingface.co) (datasets and public models, see below)
 - [Open Science Framework (OSF)](https://osf.io)
 - [Mendeley Data](https://data.mendeley.com)
+
+
+### Hugging Face models
+
+Public model repositories on Hugging Face are downloaded from the address of
+the model page. All files come from one commit: the latest one by default, or
+the branch, tag or commit in the address.
+
+```console
+datahugger https://huggingface.co/google/vit-base-patch16-224 vit/
+datahugger https://huggingface.co/google/vit-base-patch16-224/tree/<commit> vit/
+```
+
+Use `-p` to pick the revision or the files:
+
+```console
+datahugger https://huggingface.co/google/vit-base-patch16-224 vit/ \
+    -p "include=*.safetensors,*.json" -p "exclude=onnx/*"
+```
+
+`--max-file-size`, `--dry-run` and `--checksum` work as for other
+repositories; checksums exist for the large files stored with Git LFS (the
+weights). Gated and private models are not supported.
 
 
 ### DataOne repositories

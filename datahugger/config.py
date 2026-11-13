@@ -9,11 +9,22 @@ from datahugger.services import DSpaceDataset
 from datahugger.services import FigShareDataset
 from datahugger.services import GitHubDataset
 from datahugger.services import HuggingFaceDataset
+from datahugger.services import HuggingFaceModel
 from datahugger.services import MendeleyDataset
 from datahugger.services import OSFDataset
 from datahugger.services import PangaeaDataset
 from datahugger.services import SeaNoeDataset
 from datahugger.services import ZenodoDataset
+
+# Hosts that serve several kinds of records, told apart by the start of the
+# URL path. Checked before SERVICES_NETLOC; the first matching prefix wins and
+# "/" matches any path.
+SERVICES_NETLOC_PATH = {
+    "huggingface.co": [
+        ("/datasets/", HuggingFaceDataset),
+        ("/", HuggingFaceModel),
+    ],
+}
 
 # fast lookup
 SERVICES_NETLOC = {
@@ -21,7 +32,6 @@ SERVICES_NETLOC = {
     "zenodo.org": ZenodoDataset,
     "github.com": GitHubDataset,
     "datadryad.org": DataDryadDataset,
-    "huggingface.co": HuggingFaceDataset,
     "osf.io": OSFDataset,
     "data.mendeley.com": MendeleyDataset,
     # Figshare download

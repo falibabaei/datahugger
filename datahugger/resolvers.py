@@ -6,6 +6,7 @@ import requests
 
 from datahugger.config import RE3DATA_SOFTWARE
 from datahugger.config import SERVICES_NETLOC
+from datahugger.config import SERVICES_NETLOC_PATH
 from datahugger.config import SERVICES_NETLOC_REGEXP
 from datahugger.exceptions import RepositoryNotSupportedError
 from datahugger.handles import DOI
@@ -37,6 +38,10 @@ def _resolve_service_from_netloc(resource):
         return None
 
     logging.info(f"Resolve service for netloc '{uri.hostname}'")
+    for path_prefix, service in SERVICES_NETLOC_PATH.get(uri.hostname, []):
+        if uri.path.startswith(path_prefix):
+            return service
+
     if uri.hostname in SERVICES_NETLOC.keys():
         return SERVICES_NETLOC[uri.hostname]
 

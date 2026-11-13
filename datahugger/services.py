@@ -2,6 +2,7 @@ import io
 import re
 import xml.etree.ElementTree as ET
 import zipfile
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Union
 from urllib.parse import quote
@@ -291,6 +292,137 @@ class HuggingFaceDataset(DatasetDownloader):
     def files(self):
         # at the moment, .files is not available for HuggingFace
         raise NotImplementedError("'files' is not available for HuggingFace")
+
+
+class HuggingFaceModel(DatasetDownloader):
+    """Downloader for Hugging Face model repositories.
+
+    Takes the address of a model page, e.g.
+    https://huggingface.co/google/vit-base-patch16-224, optionally with a
+    branch, tag or commit: .../tree/<revision>. The revision is resolved to
+    its commit first, so all files come from the same snapshot of the model.
+
+    Params (``-p key=value`` on the command line):
+
+    - ``revision``: branch, tag or commit; overrides the one in the URL.
+    - ``include``: comma separated glob patterns of the files to download,
+      e.g. ``*.safetensors,*.json``.
+    - ``exclude``: comma separated glob patterns of the files to skip.
+
+    Only public models are supported: gated and private models need an
+    access token, which this downloader does not send.
+    """
+
+    API_URL = "https://huggingface.co/api/models/"
+    BASE_URL = "https://huggingface.co/"
+
+    # Top-level paths of huggingface.co that are not model namespaces.
+    RESERVED = (
+        "api",
+        "blog",
+        "collections",
+        "datasets",
+        "docs",
+        "models",
+        "organizations",
+        "papers",
+        "settings",
+        "spaces",
+    )
+
+    REGEXP_ID = (
+        r"huggingface\.co/"
+        r"(?!(?:" + "|".join(RESERVED) + r")(?:/|$|\?))"
+        r"(?P<record_id>[\w.-]+/[\w.-]+)"
+        r"(?:/(?:tree|blob|resolve)/(?P<version>[^/?#]+))?"
+    )
+
+    def _option(self, name):
+        """Return a user param, or None if it is not set or empty."""
+        value = (self.params or {}).get(name)
+        return value if value not in (None, "") else None
+
+    def _patterns(self, name):
+        value = self._option(name)
+        if value is None:
+            return []
+        if isinstance(value, str):
+            value = value.split(",")
+        return [pattern.strip() for pattern in value if pattern.strip()]
+
+    def _selected(self, path):
+        """Tell if a file passes the include and exclude patterns."""
+        include = self._patterns("include")
+        exclude = self._patterns("exclude")
+        if include and not any(fnmatch(path, p) for p in include):
+            return False
+        return not any(fnmatch(path, p) for p in exclude)
+
+    def _get_json(self, url):
+        res = requests.get(url)
+        if res.status_code in (401, 403):
+            raise ValueError(
+                f"No access to '{self._params['record_id']}' on Hugging Face. "
+                "It may be private or gated, or not exist; "
+                "only public models are supported."
+            )
+        if res.status_code == 404:
+            raise ValueError(
+                f"Model or revision not found on Hugging Face: "
+                f"'{self._params['record_id']}'"
+            )
+        res.raise_for_status()
+        return res
+
+    @property
+    def commit(self):
+        """The commit the requested revision points to."""
+        if not hasattr(self, "_commit"):
+            revision = self._option("revision") or self._params.get("version") or "main"
+            url = (
+                f"{self.API_URL}{self._params['record_id']}"
+                f"/revision/{quote(revision, safe='')}"
+            )
+            self._commit = self._get_json(url).json()["sha"]
+        return self._commit
+
+    @property
+    def files(self):
+        if hasattr(self, "_files"):
+            return self._files
+
+        repo_id = self._params["record_id"]
+        url = f"{self.API_URL}{repo_id}/tree/{self.commit}?recursive=true"
+
+        entries = []
+        while url:
+            res = self._get_json(url)
+            entries.extend(res.json())
+            # the listing of large repositories comes in pages
+            url = res.links.get("next", {}).get("url")
+
+        files = []
+        for entry in entries:
+            if entry.get("type") != "file" or not self._selected(entry["path"]):
+                continue
+            # Files stored with Git LFS (the weights) have a sha256 checksum.
+            # The oid of other files is a git blob hash, not a file checksum.
+            lfs = entry.get("lfs") or {}
+            files.append(
+                {
+                    "link": (
+                        f"{self.BASE_URL}{repo_id}/resolve/{self.commit}/"
+                        f"{quote(entry['path'])}"
+                    ),
+                    "name": entry["path"],
+                    "size": entry.get("size"),
+                    "hash": lfs.get("oid"),
+                    "hash_type": "sha256" if lfs.get("oid") else None,
+                }
+            )
+
+        self._files = files
+        return self._files
 
 
 class MendeleyDataset(DatasetDownloader):

@@ -125,3 +125,11 @@ files = "consolidation-wattzhub-schema-irve-statique-20240220-152202.csv"
 [[seanoe]]
 location = "https://doi.org/10.17882/101042"
 files = "111609.xlsx"
+
+[[huggingface_model]]
+location = "https://huggingface.co/prajjwal1/bert-tiny"
+files = "config.json"
+ignored_files = "pytorch_model.bin"
+
+    [huggingface_model.options.params]
+    include = "*.json,*.txt"
